@@ -17,6 +17,7 @@ function token(bytes = 18): string {
 }
 
 function clampNum(v: unknown, lo: number, hi: number, dflt: number): number {
+  if (v === null || v === undefined || v === "") return dflt; // Number(null) is 0, not NaN
   const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
 }
 
@@ -33,6 +34,25 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const sessions = env.SESSIONS.get(env.SESSIONS.idFromName("global"));
+
+    // Optional gate for the workers.dev hostname before (or instead of) Cloudflare Access:
+    // with the LAUNCH_KEY secret set, open /?k=<key> once and a cookie keeps you in.
+    const progressRoute = url.pathname.startsWith("/api/progress/");
+    if (env.LAUNCH_KEY && !progressRoute) {
+      const k = url.searchParams.get("k");
+      if (k !== null) {
+        url.searchParams.delete("k");
+        const ok = k === env.LAUNCH_KEY;
+        return new Response(null, { status: 303, headers: { location: url.pathname + url.search,
+          ...(ok ? { "set-cookie": `groove_key=${encodeURIComponent(k)}; Path=/; Max-Age=31536000; Secure; HttpOnly; SameSite=Lax` } : {}) } });
+      }
+      const cookie = req.headers.get("cookie") ?? "";
+      const m = cookie.match(/(?:^|;\s*)groove_key=([^;]*)/);
+      if (!m || decodeURIComponent(m[1]) !== env.LAUNCH_KEY) {
+        return url.pathname.startsWith("/api/") ? json({ error: "unauthorized" }, 401)
+          : new Response("locked — open this page with ?k=<launch key>", { status: 401, headers: { "content-type": "text/plain; charset=utf-8" } });
+      }
+    }
 
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
 

@@ -27,10 +27,14 @@ npm install
 npx wrangler login
 npx wrangler secret put RUNPOD_API_KEY     # a RunPod API key with pod create/delete rights
 npx wrangler secret put NOTIFY_URL         # optional: an ntfy.sh topic URL, e.g. https://ntfy.sh/<random-topic>
+npx wrangler secret put LAUNCH_KEY         # optional: long random string; the page then needs /?k=<key> once
 npx wrangler deploy
 ```
 
-Then **protect the hostname** — the page and the API have no login of their own:
+Then **protect the hostname**. The quick way is `LAUNCH_KEY`: with it set, the page and the
+API answer 401 until you open `https://<host>/?k=<key>` once on that phone (a cookie keeps
+you in for a year). The pod's progress route is exempt. The proper way, in addition or
+instead, is Cloudflare Access:
 
 1. Cloudflare Zero Trust → Access → Applications → add the Worker's hostname
    (`yue2-groove-pod.<account>.workers.dev` or your custom domain), policy *Allow* for your
