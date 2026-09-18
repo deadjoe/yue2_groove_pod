@@ -107,6 +107,19 @@ export async function createPod(
   return JSON.parse(text) as Pod;
 }
 
+/** Seconds the container has been up, or null while the image is still being pulled / the pod is stopped.
+ *  REST's runtimeStatus stays null on a running pod (seen 2026-09), so this is the reliable boot signal. */
+export async function podUptime(key: string, podId: string): Promise<number | null> {
+  const res = await call(GQL, key, {
+    method: "POST",
+    body: JSON.stringify({ query: `query { pod(input:{podId:${JSON.stringify(podId)}}) { runtime { uptimeInSeconds } } }` }),
+  });
+  if (!res.ok) throw new Error(`pod query ${res.status}`);
+  const data = (await res.json()) as { data?: { pod?: { runtime?: { uptimeInSeconds?: number | null } | null } | null } };
+  const up = data.data?.pod?.runtime?.uptimeInSeconds;
+  return typeof up === "number" ? up : null;
+}
+
 export async function getPod(key: string, id: string): Promise<Pod | null> {
   const res = await call(`${REST}/pods/${id}`, key, { method: "GET" });
   if (res.status === 404) return null;

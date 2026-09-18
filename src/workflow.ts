@@ -3,7 +3,7 @@
 // Every wait is a durable sleep; nothing here needs the phone's browser to stay open.
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { Env } from "./env";
-import { createPod, deletePod, getPod, listGpuTypes, pickCandidates, proxyUrl } from "./runpod";
+import { createPod, deletePod, getPod, listGpuTypes, pickCandidates, podUptime, proxyUrl } from "./runpod";
 import type { Session } from "./sessions";
 
 export interface DeployParams {
@@ -12,9 +12,11 @@ export interface DeployParams {
 }
 
 const RUNNING_POLL_S = 20;
-const RUNNING_MAX_MIN = 12;
+const RUNNING_MAX_MIN = 20; // the image is ~18 GB compressed; a cold host pulls it in 5–15 min
 const READY_POLL_S = 15;
 const READY_MAX_MIN = 25;
+/** steps reported by groove-start inside the pod */
+const POD_STEPS = new Set(["weights", "verify", "start", "ready"]);
 
 export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
   async run(event: WorkflowEvent<DeployParams>, step: WorkflowStep) {
@@ -86,9 +88,13 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
       running = await step.do(`pod running? ${i}`, async () => {
         const p = await getPod(key, pod.id);
         if (!p) throw new Error("pod disappeared");
-        const state = `${p.desiredStatus ?? ""}/${p.runtimeStatus ?? ""}`.toLowerCase();
-        if (i === 0 || i % 6 === 0) await sessions.event(sessionId, { step: "boot", status: "info", message: `pod ${state}` });
-        return state.includes("running") && (p.runtimeStatus ?? "").toLowerCase() === "running";
+        const uptime = await podUptime(key, pod.id).catch(() => null);
+        // any callback from groove-start also proves the container is up
+        const s = await sessions.get(sessionId);
+        const reported = s?.events.some((e) => POD_STEPS.has(e.step)) ?? false;
+        const up = uptime !== null || (p.runtimeStatus ?? "").toLowerCase() === "running" || reported;
+        if (!up && (i === 0 || i % 6 === 0)) await sessions.event(sessionId, { step: "boot", status: "info", message: `pulling the image (${Math.round((i * RUNNING_POLL_S) / 60)} min)` });
+        return up;
       });
       if (!running) await step.sleep(`running poll ${i}`, `${RUNNING_POLL_S} seconds`);
     }
@@ -103,7 +109,7 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
         if (!s) throw new Error("session vanished");
         if (s.state === "stopping" || s.state === "ended" || s.state === "failed") return true; // stopped from the page
         if (s.events.some((e) => e.step === "ready" && e.status === "done")) return true;
-        if (s.events.some((e) => e.status === "failed" && ["weights", "verify", "start"].includes(e.step))) return true;
+        if (s.events.some((e) => e.status === "failed" && POD_STEPS.has(e.step))) return true;
         try {
           const r = await fetch(proxyUrl(pod.id), { method: "GET", redirect: "manual", headers: { "user-agent": "yue2-groove-pod/0.1" } });
           if (r.status === 200 || r.status === 401) { await sessions.event(sessionId, { step: "ready", status: "done", message: proxyUrl(pod.id) }); return true; }
