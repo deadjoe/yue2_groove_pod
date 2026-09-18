@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>YUE2 // GROOVE — POD</title>
+<style>
+  /* Bearbone DS v0.2 tokens, as in the app: warm near-black / ivory, 1px strokes, monospace, no shadows */
+  :root {
+    --bb-field: #0B0A09; --bb-panel: #12110F; --bb-well: #171512; --bb-lift: #1C1916;
+    --bb-ink: #F1ECE2; --bb-ink2: #B5AEA2; --bb-ink3: #7A746A; --bb-ink4: #57524A;
+    --bb-line: #2E2B27; --bb-line2: #8C8477;
+    --bb-primary-bg: #F1ECE2; --bb-primary-bg-hover: #FBF8F2; --bb-primary-fg: #16140F;
+    --bb-danger: #D08A8A; --bb-ok: #9DBF9E;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bb-field: #F1ECE2; --bb-panel: #F7F3EB; --bb-well: #F7F3EB; --bb-lift: #EAE4D8;
+      --bb-ink: #16140F; --bb-ink2: #4A463F; --bb-ink3: #7A746A; --bb-ink4: #A69D8D;
+      --bb-line: #C4BBA8; --bb-line2: #7E7462;
+      --bb-primary-bg: #11141C; --bb-primary-bg-hover: #2B3244; --bb-primary-fg: #F1ECE2;
+      --bb-danger: #B23B3B; --bb-ok: #3E7A4A;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bb-field); color: var(--bb-ink); }
+  body {
+    font-family: "Berkeley Mono", "Sarasa Mono SC", "JetBrains Mono", "SF Mono", "Noto Sans Mono CJK SC", ui-monospace, Menlo, monospace;
+    font-size: 14px; line-height: 1.45; letter-spacing: .01em;
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
+    max-width: 640px; margin: 0 auto;
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 17px; font-weight: 600; letter-spacing: .05em; margin: 0; }
+  h1 .slash { color: var(--bb-ink4); padding: 0 6px; }
+  .meta { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--bb-ink3); }
+  .panel { border: 1px solid var(--bb-line); border-radius: 10px; background: var(--bb-panel); padding: 14px; margin-bottom: 14px; }
+  .panel h2 { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--bb-ink3); margin: 0 0 10px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  label { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--bb-ink3); margin-bottom: 4px; }
+  select, input { width: 100%; font: inherit; color: var(--bb-ink); background: var(--bb-well); border: 1px solid var(--bb-line); border-radius: 8px; padding: 10px; }
+  button { font: inherit; letter-spacing: .08em; text-transform: uppercase; border-radius: 8px; padding: 12px 14px; border: 1px solid var(--bb-line2); background: var(--bb-lift); color: var(--bb-ink); cursor: pointer; width: 100%; }
+  button.primary { background: var(--bb-primary-bg); color: var(--bb-primary-fg); border-color: var(--bb-primary-bg); font-weight: 600; }
+  button.primary:hover { background: var(--bb-primary-bg-hover); }
+  button.danger { color: var(--bb-danger); border-color: var(--bb-danger); background: transparent; }
+  button[disabled] { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 140px; }
+  .state { display: inline-block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding: 3px 8px; border: 1px solid var(--bb-line2); border-radius: 999px; color: var(--bb-ink2); }
+  .state.ready { color: var(--bb-ok); border-color: var(--bb-ok); }
+  .state.failed { color: var(--bb-danger); border-color: var(--bb-danger); }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13px; }
+  .kv dt { color: var(--bb-ink3); } .kv dd { margin: 0; word-break: break-all; }
+  .link { display: block; padding: 12px; border: 1px solid var(--bb-ok); border-radius: 8px; color: var(--bb-ink); text-decoration: none; text-align: center; font-weight: 600; letter-spacing: .05em; margin: 10px 0; }
+  .events { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--bb-line); }
+  .events li { display: grid; grid-template-columns: 52px 74px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--bb-line); font-size: 12.5px; }
+  .events time { color: var(--bb-ink4); } .events .step { color: var(--bb-ink2); letter-spacing: .08em; text-transform: uppercase; }
+  .events .failed { color: var(--bb-danger); } .events .done { color: var(--bb-ok); }
+  .muted { color: var(--bb-ink3); font-size: 12px; }
+  .cands { font-size: 12px; color: var(--bb-ink2); margin-top: 8px; }
+  .cands span { display: inline-block; margin: 2px 8px 2px 0; }
+  footer { margin-top: 20px; font-size: 11px; color: var(--bb-ink4); letter-spacing: .08em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<header>
+  <h1>YUE2<span class="slash">//</span>GROOVE<span class="slash">//</span>POD</h1>
+  <span class="meta" id="clock"></span>
+</header>
+
+<section class="panel" id="launch">
+  <h2>Launch on RunPod</h2>
+  <div class="grid">
+    <div><label for="ttl">Auto-stop after</label><select id="ttl"><option value="1">1 h</option><option value="2">2 h</option><option value="3" selected>3 h</option><option value="4">4 h</option><option value="6">6 h</option></select></div>
+    <div><label for="gb">GPU memory</label><select id="gb"><option value="16">≥ 16 GB</option><option value="24">≥ 24 GB</option></select></div>
+    <div><label for="price">Max $/h</label><select id="price"><option value="0.35">0.35</option><option value="0.5">0.50</option><option value="0.6" selected>0.60</option><option value="0.8">0.80</option></select></div>
+    <div><label for="cloud">Cloud</label><select id="cloud"><option value="SECURE" selected>Secure</option><option value="COMMUNITY">Community</option></select></div>
+  </div>
+  <div class="cands" id="cands">checking prices…</div>
+  <div style="margin-top:12px"><button class="primary" id="go">Deploy</button></div>
+  <p class="muted" id="launch-note">A pod is created, the image pulled, the weights downloaded and verified, then the app started. Usually 5–8 minutes. You can close this page; it keeps going.</p>
+</section>
+
+<section id="sessions"></section>
+
+<footer>ghcr.io/deadjoe/yue2_groove · runpod · cost guard on</footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const fmtT = (iso) => { const d = new Date(iso); return isNaN(d) ? "" : d.toTimeString().slice(0, 5); };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let timer = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, { headers: { "content-type": "application/json" }, ...opts });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `${r.status}`);
+  return data;
+}
+
+async function loadCandidates() {
+  const q = new URLSearchParams({ min_gb: $("#gb").value, max_price: $("#price").value, cloud: $("#cloud").value });
+  $("#cands").textContent = "checking prices…";
+  try {
+    const d = await api(`/api/gpus?${q}`);
+    $("#cands").innerHTML = d.candidates.length
+      ? "in stock now: " + d.candidates.slice(0, 6).map((c) => `<span>${esc(c.displayName)} <b>$${c.pricePerHr}/h</b> ${esc(c.stock)}</span>`).join("")
+      : "nothing in stock within these limits — widen the price or memory";
+    $("#go").disabled = !d.candidates.length;
+  } catch (e) { $("#cands").textContent = "price check failed: " + e.message; }
+}
+
+function render(list) {
+  const live = list.find((s) => !["ended", "failed"].includes(s.state));
+  $("#launch").hidden = !!live;
+  $("#sessions").innerHTML = list.slice(0, 5).map((s) => {
+    const login = s.auth_user && s.auth_pass ? `${s.auth_user} / ${s.auth_pass}` : "";
+    const active = !["ended", "failed"].includes(s.state);
+    return `<section class="panel">
+      <h2>${esc(s.id)} <span class="state ${esc(s.state)}">${esc(s.state)}</span></h2>
+      ${s.state === "ready" && s.url ? `<a class="link" href="${esc(s.url)}" target="_blank" rel="noopener">OPEN GROOVE ↗</a>` : ""}
+      <dl class="kv">
+        ${s.gpu ? `<dt>gpu</dt><dd>${esc(s.gpu)}${s.data_center ? " · " + esc(s.data_center) : ""}</dd>` : ""}
+        ${s.price_per_hr ? `<dt>price</dt><dd>$${s.price_per_hr}/h · est. $${s.cost_est ?? "0"} so far</dd>` : ""}
+        ${login && active ? `<dt>login</dt><dd>${esc(login)}</dd>` : ""}
+        ${s.expires && active ? `<dt>auto-stop</dt><dd>${fmtT(s.expires)}</dd>` : ""}
+        ${s.error ? `<dt>error</dt><dd class="failed">${esc(s.error)}</dd>` : ""}
+      </dl>
+      ${active ? `<div style="margin-top:10px"><button class="danger" data-stop="${esc(s.id)}">Stop &amp; delete pod</button></div>` : ""}
+      <ul class="events">${s.events.slice(-12).reverse().map((e) => `<li><time>${fmtT(e.ts)}</time><span class="step">${esc(e.step)}</span><span class="${esc(e.status)}">${esc(e.message || e.status)}</span></li>`).join("")}</ul>
+    </section>`;
+  }).join("") || `<p class="muted">no sessions yet</p>`;
+  document.querySelectorAll("[data-stop]").forEach((b) => b.onclick = async () => {
+    if (!confirm("Delete the pod now?")) return;
+    b.disabled = true; try { await api(`/api/sessions/${b.dataset.stop}/stop`, { method: "POST" }); } catch (e) { alert(e.message); }
+    refresh();
+  });
+  clearTimeout(timer);
+  timer = setTimeout(refresh, live ? 5000 : 30000);
+}
+
+async function refresh() {
+  try { render((await api("/api/sessions")).sessions); } catch (e) { $("#sessions").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+}
+
+$("#go").onclick = async () => {
+  $("#go").disabled = true;
+  try {
+    await api("/api/launch", { method: "POST", body: JSON.stringify({ ttl_hours: +$("#ttl").value, min_gpu_gb: +$("#gb").value, max_price: +$("#price").value, cloud: $("#cloud").value }) });
+  } catch (e) { alert(e.message); }
+  $("#go").disabled = false; refresh();
+};
+["#gb", "#price", "#cloud"].forEach((s) => $(s).onchange = loadCandidates);
+setInterval(() => $("#clock").textContent = new Date().toTimeString().slice(0, 5), 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+loadCandidates(); refresh();
+</script>
+</body>
+</html>

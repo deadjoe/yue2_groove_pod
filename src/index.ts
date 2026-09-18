@@ -1,0 +1,126 @@
+// Worker: JSON API under /api/*, the phone page from /public, and a cost-guard sweep on a cron.
+// Put the whole hostname behind Cloudflare Access; add a bypass policy for /api/progress/* so
+// the pod can report progress (that route is protected by the per-session bearer token).
+import type { Env } from "./env";
+import { listGpuTypes, listPods, pickCandidates } from "./runpod";
+import { Sessions, type Session } from "./sessions";
+import { DeployWorkflow, stopPod } from "./workflow";
+
+export { Sessions, DeployWorkflow };
+
+const json = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+
+function token(bytes = 18): string {
+  const b = new Uint8Array(bytes); crypto.getRandomValues(b);
+  return btoa(String.fromCharCode(...b)).replace(/[+/=]/g, (c) => ({ "+": "a", "/": "b", "=": "" })[c] ?? "");
+}
+
+function clampNum(v: unknown, lo: number, hi: number, dflt: number): number {
+  const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+}
+
+/** What the page may see: no progress token. */
+function publicView(s: Session) {
+  const { progress_token: _t, ...rest } = s;
+  const started = s.ready_at ?? s.created;
+  const end = s.ended_at ?? new Date().toISOString();
+  const hours = s.pod_id ? Math.max(0, (Date.parse(end) - Date.parse(s.created)) / 3600_000) : 0;
+  return { ...rest, hours_billed_est: Math.round(hours * 100) / 100, cost_est: s.price_per_hr ? Math.round(s.price_per_hr * hours * 100) / 100 : null, started };
+}
+
+export default {
+  async fetch(req: Request, env: Env): Promise<Response> {
+    const url = new URL(req.url);
+    const sessions = env.SESSIONS.get(env.SESSIONS.idFromName("global"));
+
+    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
+
+    // pod → launcher progress (bearer token per session); must be reachable without Access
+    const progress = url.pathname.match(/^\/api\/progress\/([A-Za-z0-9_-]+)$/);
+    if (progress && req.method === "POST") {
+      const s = await sessions.get(progress[1]);
+      const auth = req.headers.get("authorization") ?? "";
+      if (!s || auth !== `Bearer ${s.progress_token}`) return json({ error: "unauthorized" }, 401);
+      const body = (await req.json().catch(() => ({}))) as { step?: string; status?: string; message?: string; ts?: string };
+      if (!body.step || !body.status) return json({ error: "step and status required" }, 400);
+      await sessions.event(s.id, { step: String(body.step).slice(0, 32), status: String(body.status).slice(0, 16), message: body.message ? String(body.message).slice(0, 600) : undefined, ts: body.ts });
+      return json({ ok: true });
+    }
+
+    if (url.pathname === "/api/gpus" && req.method === "GET") {
+      const gpus = await listGpuTypes(env.RUNPOD_API_KEY);
+      const cloud = (url.searchParams.get("cloud") === "COMMUNITY" ? "COMMUNITY" : "SECURE") as "SECURE" | "COMMUNITY";
+      const minGb = clampNum(url.searchParams.get("min_gb"), 8, 80, Number(env.MIN_GPU_GB));
+      const maxPrice = clampNum(url.searchParams.get("max_price"), 0.05, 5, Number(env.MAX_PRICE_PER_HR));
+      return json({ candidates: pickCandidates(gpus, { minGb, maxPrice, cloud }), defaults: { min_gb: Number(env.MIN_GPU_GB), max_price: Number(env.MAX_PRICE_PER_HR), cloud: env.CLOUD, ttl_hours: Number(env.DEFAULT_TTL_HOURS), max_ttl_hours: Number(env.MAX_TTL_HOURS), image: env.IMAGE } });
+    }
+
+    if (url.pathname === "/api/sessions" && req.method === "GET") {
+      return json({ sessions: (await sessions.list(20)).map(publicView) });
+    }
+
+    const one = url.pathname.match(/^\/api\/sessions\/([A-Za-z0-9_-]+)(\/stop)?$/);
+    if (one) {
+      const s = await sessions.get(one[1]);
+      if (!s) return json({ error: "not found" }, 404);
+      if (!one[2] && req.method === "GET") return json({ session: publicView(s) });
+      if (one[2] && req.method === "POST") {
+        if (s.state === "ended" || s.state === "failed") return json({ session: publicView(s) });
+        await stopPod(env, s.id, s.pod_id, "stopped from the launcher");
+        if (s.workflow_id) { try { await (await env.DEPLOY.get(s.workflow_id)).terminate(); } catch { /* already finished */ } }
+        return json({ session: publicView((await sessions.get(s.id))!) });
+      }
+    }
+
+    if (url.pathname === "/api/launch" && req.method === "POST") {
+      const live = await sessions.live();
+      if (live.length) return json({ error: `a session is already active (${live[0].id}, ${live[0].state}); stop it first`, session: publicView(live[0]) }, 409);
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const id = `${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}-${token(4).toLowerCase()}`;
+      const s: Session = {
+        id, created: new Date().toISOString(), state: "queued",
+        ttl_hours: clampNum(body.ttl_hours, 0.25, Number(env.MAX_TTL_HOURS), Number(env.DEFAULT_TTL_HOURS)),
+        expires: null,
+        min_gpu_gb: clampNum(body.min_gpu_gb, 8, 80, Number(env.MIN_GPU_GB)),
+        max_price: clampNum(body.max_price, 0.05, 5, Number(env.MAX_PRICE_PER_HR)),
+        cloud: body.cloud === "COMMUNITY" ? "COMMUNITY" : "SECURE",
+        image: typeof body.image === "string" && /^ghcr\.io\/deadjoe\/yue2_groove:[\w.-]+$/.test(body.image) ? body.image : env.IMAGE,
+        auth_user: "groove", auth_pass: token(9).toLowerCase(), progress_token: token(24),
+        workflow_id: null, pod_id: null, gpu: null, price_per_hr: null, data_center: null,
+        url: null, ready_at: null, ended_at: null, error: null, events: [],
+      };
+      await sessions.create(s);
+      const instance = await env.DEPLOY.create({ id: `deploy-${id}`, params: { sessionId: id, progressUrl: `${url.origin}/api/progress/${id}` } });
+      await sessions.update(id, { workflow_id: instance.id });
+      await sessions.event(id, { step: "select", status: "info", message: "launch requested" });
+      return json({ session: publicView((await sessions.get(id))!) }, 201);
+    }
+
+    return json({ error: "not found" }, 404);
+  },
+
+  // Cost guard: every 15 minutes delete any RunPod pod of ours whose session is over or
+  // past its TTL, and close sessions whose pod is gone.
+  async scheduled(_ctl: ScheduledController, env: Env): Promise<void> {
+    const sessions = env.SESSIONS.get(env.SESSIONS.idFromName("global"));
+    const pods = await listPods(env.RUNPOD_API_KEY).catch(() => [] as Awaited<ReturnType<typeof listPods>>);
+    const ours = pods.filter((p) => (p.name ?? "").startsWith("yue2-groove-"));
+    const known = await sessions.list(200);
+    const now = Date.now();
+    for (const p of ours) {
+      const s = known.find((k) => k.pod_id === p.id);
+      const expired = s?.expires ? Date.parse(s.expires) < now : false;
+      const stale = !s && now - Date.parse(String((p as { createdAt?: string }).createdAt ?? new Date().toISOString())) > 6 * 3600_000;
+      if (!s || s.state === "ended" || s.state === "failed" || expired || stale) {
+        await stopPod(env, s?.id ?? `orphan-${p.id}`, p.id, "cost-guard sweep").catch(() => undefined);
+      }
+    }
+    for (const s of await sessions.live()) {
+      if (s.pod_id && !ours.some((p) => p.id === s.pod_id) && (s.state === "ready" || s.state === "booting")) {
+        await sessions.event(s.id, { step: "stop", status: "info", message: "pod no longer exists on RunPod" });
+        await sessions.update(s.id, { state: "ended", ended_at: new Date().toISOString() });
+      }
+    }
+  },
+} satisfies ExportedHandler<Env>;
