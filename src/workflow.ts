@@ -26,6 +26,8 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
     const key = env.RUNPOD_API_KEY;
 
     const fail = async (where: string, message: string) => {
+      const cur = await sessions.get(sessionId);
+      if (!cur || cur.state === "ended" || cur.state === "stopping") return; // stopped from the page meanwhile
       await sessions.event(sessionId, { step: "error", status: "failed", message: `${where}: ${message}` });
       await sessions.update(sessionId, { state: "failed", error: `${where}: ${message}`, ended_at: new Date().toISOString() });
       await notify(env, `GROOVE pod failed — ${where}: ${message}`.slice(0, 400));
