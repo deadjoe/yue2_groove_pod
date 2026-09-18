@@ -118,7 +118,14 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
         if (s.events.some((e) => e.status === "failed" && POD_STEPS.has(e.step))) return true;
         try {
           const r = await fetch(proxyUrl(pod.id), { method: "GET", redirect: "manual", headers: { "user-agent": "yue2-groove-pod/0.1" } });
-          if (r.status === 200 || r.status === 401) { await sessions.event(sessionId, { step: "ready", status: "done", message: proxyUrl(pod.id) }); return true; }
+          if (r.status === 200 || r.status === 401) {
+            // the pod's own ready callback may have landed during this probe; don't log it twice
+            const again = await sessions.get(sessionId);
+            if (!again?.events.some((e) => e.step === "ready" && e.status === "done")) {
+              await sessions.event(sessionId, { step: "ready", status: "done", message: `${proxyUrl(pod.id)} (proxy answered)` });
+            }
+            return true;
+          }
         } catch { /* proxy not up yet */ }
         return false;
       });
