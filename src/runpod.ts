@@ -25,7 +25,7 @@ export interface Candidate {
 }
 
 // GPUs the app cannot use: no bf16 (Volta/Turing/Pascal) — upstream's loader refuses them.
-const NO_BF16 = /V100|T4\b|P100|P40|P4\b|RTX 20|A2\b/i;
+const NO_BF16 = /V100|T4\b|P100|P40|P4\b|RTX 20|A2\b|MIG/i; // MIG slices are not accepted as gpuTypeIds either
 
 async function call(url: string, key: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
@@ -96,12 +96,14 @@ export async function createPod(
       gpuCount: 1,
       gpuTypePriority: "custom", // try gpuTypeIds in the order given
       dataCenterPriority: "availability",
-      allowedCudaVersions: ["12.8", "12.9", "13.0", "13.1", "13.2"],
+      allowedCudaVersions: ["12.8", "12.9", "13.0"], // the REST schema enum stops at 13.0 (2026-09)
+      volumeInGb: 0, // no persistent volume: weights live on the container disk for the session
+      minRAMPerGPU: 16,
       supportPublicIp: false,
     }),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`create pod ${res.status}: ${text.slice(0, 300)}`);
+  if (!res.ok) throw new Error(`create pod ${res.status}: ${text.slice(0, 900)}`);
   return JSON.parse(text) as Pod;
 }
 
