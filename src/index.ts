@@ -129,7 +129,8 @@ export default {
     const known = await sessions.list(200);
     const now = Date.now();
     for (const p of ours) {
-      const s = known.find((k) => k.pod_id === p.id);
+      // by pod id, or by name for a pod created seconds ago whose id the workflow has not stored yet
+      const s = known.find((k) => k.pod_id === p.id) ?? known.find((k) => p.name === `yue2-groove-${k.id}`);
       const expired = s?.expires ? Date.parse(s.expires) < now : false;
       const stale = !s && now - Date.parse(String((p as { createdAt?: string }).createdAt ?? new Date().toISOString())) > 6 * 3600_000;
       if (!s || s.state === "ended" || s.state === "failed" || expired || stale) {
