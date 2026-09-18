@@ -134,7 +134,9 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
     }
 
     // 5. ready → notify
-    const expires = new Date(Date.now() + session.ttl_hours * 3600_000).toISOString();
+    // persisted as a step output: anything computed outside a step is recomputed on every replay,
+    // and a moving expiry made sleepUntil sleep again after each wake (seen 2026-09-18)
+    const expires = await step.do("expiry", async () => new Date(Date.now() + session.ttl_hours * 3600_000).toISOString());
     await step.do("mark ready", async () => {
       const s = await sessions.update(sessionId, { state: "ready", ready_at: new Date().toISOString(), expires });
       await notify(env, `GROOVE is up: ${proxyUrl(pod.id)}  login ${session.auth_user} / ${s?.auth_pass ?? "?"}  (auto-stop ${session.ttl_hours} h)`);
