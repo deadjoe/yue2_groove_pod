@@ -46,6 +46,8 @@ instead, is Cloudflare Access:
 ## Use
 
 Open the page on your phone, pick the time limit / memory / price ceiling, tap **Deploy**.
+Most of the wait is RunPod pulling the ~18 GB image onto a cold host (5–15 min); once the
+container runs, weights (31 s), verification (15 s) and app start (6 s) take about a minute.
 The timeline fills in from the pod itself (`weights`, `verify`, `start`, `ready`). When the
 state turns **ready**, tap *OPEN GROOVE* and log in with `groove` / the shown password.
 Closing the page changes nothing; the Workflow finishes on its own and, if `NOTIFY_URL` is
