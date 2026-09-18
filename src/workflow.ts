@@ -31,10 +31,13 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
       await notify(env, `GROOVE pod failed — ${where}: ${message}`.slice(0, 400));
     };
 
+    // step outputs are persisted in the Workflow's history, so secrets stay out of them:
+    // the pod's password and progress token are read from the DO inside the create step
     const session = await step.do("load session", async () => {
       const s = await sessions.get(sessionId);
       if (!s) throw new Error("session not found");
-      return s;
+      const { auth_pass: _p, progress_token: _t, events: _e, ...rest } = s;
+      return rest;
     });
 
     // 1. pick cards
@@ -55,6 +58,8 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
     const pod = await step.do("create pod", { retries: { limit: 4, delay: "45 seconds", backoff: "linear" } }, async () => {
       await sessions.update(sessionId, { state: "creating" });
       await sessions.event(sessionId, { step: "pod", status: "started", message: `creating (${candidates.length} candidates)` });
+      const secrets = await sessions.get(sessionId);
+      if (!secrets) throw new Error("session not found");
       const p = await createPod(key, {
         name: `yue2-groove-${sessionId}`,
         imageName: session.image,
@@ -63,12 +68,13 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
         containerDiskInGb: Number(env.CONTAINER_DISK_GB || "40"),
         ports: ["7860/http", "22/tcp"],
         env: {
-          YUE2_GROOVE_AUTH: `${session.auth_user}:${session.auth_pass}`,
+          YUE2_GROOVE_AUTH: `${session.auth_user}:${secrets.auth_pass}`,
           GROOVE_PROGRESS_URL: progressUrl,
-          GROOVE_PROGRESS_TOKEN: session.progress_token,
+          GROOVE_PROGRESS_TOKEN: secrets.progress_token,
         },
       });
-      return p;
+      const { env: _env, ...podNoEnv } = p as typeof p & { env?: unknown };
+      return podNoEnv as typeof p;
     }).catch(async (e: Error) => { await fail("create pod", e.message); return null; });
     if (!pod) return;
 
@@ -130,8 +136,8 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
     // 5. ready → notify
     const expires = new Date(Date.now() + session.ttl_hours * 3600_000).toISOString();
     await step.do("mark ready", async () => {
-      await sessions.update(sessionId, { state: "ready", ready_at: new Date().toISOString(), expires });
-      await notify(env, `GROOVE is up: ${proxyUrl(pod.id)}  login ${session.auth_user} / ${session.auth_pass}  (auto-stop ${session.ttl_hours} h)`);
+      const s = await sessions.update(sessionId, { state: "ready", ready_at: new Date().toISOString(), expires });
+      await notify(env, `GROOVE is up: ${proxyUrl(pod.id)}  login ${session.auth_user} / ${s?.auth_pass ?? "?"}  (auto-stop ${session.ttl_hours} h)`);
     });
 
     // 6. cost guard — sleep to the TTL, then delete unless already stopped from the page
