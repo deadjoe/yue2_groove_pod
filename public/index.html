@@ -3,6 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+  // iOS zooms the page in when a field takes focus and keeps that zoom after blur;
+  // maximum-scale=1 switches that off (iOS still lets you pinch — it has ignored the
+  // cap for pinch zoom since iOS 10).  Android honours the cap, so only iOS gets it.
+  try {
+    if (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+      document.querySelector('meta[name="viewport"]').content = 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover';
+    }
+  } catch (e) {}
+</script>
 <meta name="color-scheme" content="dark light">
 <title>YUE2 // GROOVE — POD</title>
 <style>
@@ -25,6 +35,8 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bb-field); color: var(--bb-ink); }
+  /* no double-tap smart zoom (tap a control, tap again = zoomed page); pan and pinch stay */
+  body { touch-action: manipulation; }
   body {
     font-family: "Berkeley Mono", "Sarasa Mono SC", "JetBrains Mono", "SF Mono", "Noto Sans Mono CJK SC", ui-monospace, Menlo, monospace;
     font-size: 14px; line-height: 1.45; letter-spacing: .01em;
@@ -40,6 +52,8 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
   label { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--bb-ink3); margin-bottom: 4px; }
   select, input { width: 100%; font: inherit; color: var(--bb-ink); background: var(--bb-well); border: 1px solid var(--bb-line); border-radius: 8px; padding: 10px; }
+  /* 16px is the size below which iOS zooms the page when a control takes focus */
+  @media (hover: none) and (pointer: coarse) { select, input { font-size: 16px; } }
   button { font: inherit; letter-spacing: .08em; text-transform: uppercase; border-radius: 8px; padding: 12px 14px; border: 1px solid var(--bb-line2); background: var(--bb-lift); color: var(--bb-ink); cursor: pointer; width: 100%; }
   button.primary { background: var(--bb-primary-bg); color: var(--bb-primary-fg); border-color: var(--bb-primary-bg); font-weight: 600; }
   button.primary:hover { background: var(--bb-primary-bg-hover); }
@@ -51,10 +65,11 @@
   .state.ready { color: var(--bb-ok); border-color: var(--bb-ok); }
   .state.failed { color: var(--bb-danger); border-color: var(--bb-danger); }
   .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13px; }
-  .kv dt { color: var(--bb-ink3); } .kv dd { margin: 0; word-break: break-all; }
+  .kv dt { color: var(--bb-ink3); } .kv dd { margin: 0; overflow-wrap: anywhere; }   /* prose breaks at spaces, a URL wherever it must */
   .link { display: block; padding: 12px; border: 1px solid var(--bb-ok); border-radius: 8px; color: var(--bb-ink); text-decoration: none; text-align: center; font-weight: 600; letter-spacing: .05em; margin: 10px 0; }
   .events { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--bb-line); }
-  .events li { display: grid; grid-template-columns: 52px 74px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--bb-line); font-size: 12.5px; }
+  .events li { display: grid; grid-template-columns: 52px 74px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--bb-line); font-size: 12.5px; }
+  .events li > * { min-width: 0; overflow-wrap: anywhere; }   /* a proxy URL must wrap, not widen the page */
   .events time { color: var(--bb-ink4); } .events .step { color: var(--bb-ink2); letter-spacing: .08em; text-transform: uppercase; }
   .events .failed { color: var(--bb-danger); } .events .done { color: var(--bb-ok); }
   .muted { color: var(--bb-ink3); font-size: 12px; }

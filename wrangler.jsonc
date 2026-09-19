@@ -19,8 +19,9 @@
   ],
   "triggers": { "crons": ["*/15 * * * *"] },
   "vars": {
-    // The image built from yue2_groove/deploy/docker (GHCR, public).
-    "IMAGE": "ghcr.io/deadjoe/yue2_groove:main",
+    // The image built from yue2_groove/deploy/docker (GHCR, public): `latest` follows every
+    // release tag (v0.9.0 → …); `main` was a one-off manual build and no longer moves.
+    "IMAGE": "ghcr.io/deadjoe/yue2_groove:latest",
     // Selection rules: smallest card the app is validated on, price ceiling, cloud.
     "MIN_GPU_GB": "16",
     "MAX_PRICE_PER_HR": "0.60",

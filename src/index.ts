@@ -12,10 +12,11 @@ const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 
 const LOCK_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark light"><title>YUE2 // GROOVE — POD</title>
+<script>try{if(/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)){document.querySelector('meta[name="viewport"]').content='width=device-width, initial-scale=1, maximum-scale=1'}}catch(e){}</script>
 <style>:root{--bg:#0B0A09;--panel:#12110F;--ink:#F1ECE2;--ink3:#7A746A;--line:#2E2B27;--pbg:#F1ECE2;--pfg:#16140F}@media(prefers-color-scheme:light){:root{--bg:#F1ECE2;--panel:#F7F3EB;--ink:#16140F;--ink3:#7A746A;--line:#C4BBA8;--pbg:#11141C;--pfg:#F1ECE2}}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font:14px/1.45 "Berkeley Mono","JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;padding:16px;box-sizing:border-box}
+body{margin:0;min-height:100vh;min-height:100svh;touch-action:manipulation;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font:14px/1.45 "Berkeley Mono","JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;padding:16px;box-sizing:border-box}
 form{width:100%;max-width:360px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:16px}h1{font-size:15px;letter-spacing:.06em;margin:0 0 12px}label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
-input{width:100%;box-sizing:border-box;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}button{width:100%;font:inherit;letter-spacing:.08em;text-transform:uppercase;font-weight:600;border-radius:8px;padding:12px;border:0;background:var(--pbg);color:var(--pfg)}</style></head>
+input{width:100%;box-sizing:border-box;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}button{width:100%;font:inherit;letter-spacing:.08em;text-transform:uppercase;font-weight:600;border-radius:8px;padding:12px;border:0;background:var(--pbg);color:var(--pfg)}</style></head>
 <body><form method="get" action="/"><h1>YUE2 // GROOVE // POD</h1><label for="k">launch key</label><input id="k" name="k" type="password" autocomplete="current-password" autofocus required><button>Unlock</button></form></body></html>`;
 
 function token(bytes = 18): string {
