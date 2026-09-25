@@ -63,8 +63,8 @@ six hours.
 
 With `NOTIFY_URL` set, the Worker pushes a message when the app is ready, when a launch
 fails and when the time limit deletes the pod, whether or not the page is open. Tapping it
-opens the launcher. The *ready* message includes the login (`groove` / password), so it
-passes through the push service you choose. Pick one:
+opens the launcher. The message carries the pod's address, never the login password, which
+stays on the launcher page. Pick one:
 
 | Service | `NOTIFY_URL` | Notes |
 |---|---|---|

@@ -149,8 +149,9 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
     // and a moving expiry made sleepUntil sleep again after each wake (seen 2026-09-18)
     const expires = await step.do("expiry", async () => new Date(Date.now() + session.ttl_hours * 3600_000).toISOString());
     await step.do("mark ready", async () => {
-      const s = await sessions.update(sessionId, { state: "ready", ready_at: new Date().toISOString(), expires });
-      await notify(env, `GROOVE is up: ${proxyUrl(pod.id)}  login ${session.auth_user} / ${s?.auth_pass ?? "?"}  (auto-stop ${session.ttl_hours} h)`, launcher);
+      await sessions.update(sessionId, { state: "ready", ready_at: new Date().toISOString(), expires });
+      // the login stays on the launcher page; a push service never sees it
+      await notify(env, `GROOVE is up: ${proxyUrl(pod.id)} — log in with the password on the launcher (auto-stop ${session.ttl_hours} h)`, launcher);
     });
 
     // 6. cost guard — sleep to the TTL, then delete unless already stopped from the page
