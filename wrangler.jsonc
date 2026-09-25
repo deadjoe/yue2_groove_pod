@@ -34,5 +34,5 @@
   }
   // Secrets (wrangler secret put): RUNPOD_API_KEY (required), NOTIFY_URL (optional Bark or ntfy URL),
   // NOTIFY_TOKEN (ntfy access token; needed with ntfy.sh, see README),
-  // LAUNCH_KEY (optional; gates the page + API with a cookie set from /?k=<key>)
+  // LAUNCH_KEY (strongly advised; gates the page + API with a cookie set from /?k=<key>)
 }
