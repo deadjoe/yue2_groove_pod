@@ -94,6 +94,7 @@
   </div>
   <div class="cands" id="cands">checking prices…</div>
   <div style="margin-top:12px"><button class="primary" id="go">Deploy</button></div>
+  <div class="row" style="margin-top:10px;align-items:center"><span class="muted" id="notify-state"></span><button id="notify-test" hidden>Send test notification</button></div>
   <p class="muted" id="launch-note">A pod is created, the image pulled (the slow part, 5–15 min on a cold host), the weights downloaded and verified, then the app started. You can close this page; it keeps going.</p>
 </section>
 
@@ -123,6 +124,9 @@ async function loadCandidates() {
       ? "in stock now: " + d.candidates.slice(0, 6).map((c) => `<span>${esc(c.displayName)} <b>$${c.pricePerHr}/h</b> ${esc(c.stock)}</span>`).join("")
       : "nothing in stock within these limits — widen the price or memory";
     $("#go").disabled = !d.candidates.length;
+    const kind = d.defaults.notify;
+    $("#notify-state").textContent = kind ? `notifications: ${kind === "bark" ? "Bark" : "ntfy"}` : "notifications: off (set NOTIFY_URL)";
+    $("#notify-test").hidden = !kind;
   } catch (e) { $("#cands").textContent = "price check failed: " + e.message; }
 }
 
@@ -165,6 +169,15 @@ $("#go").onclick = async () => {
     await api("/api/launch", { method: "POST", body: JSON.stringify({ ttl_hours: +$("#ttl").value, min_gpu_gb: +$("#gb").value, max_price: +$("#price").value, cloud: $("#cloud").value }) });
   } catch (e) { alert(e.message); }
   $("#go").disabled = false; refresh();
+};
+$("#notify-test").onclick = async () => {
+  $("#notify-test").disabled = true;
+  try {
+    const r = await fetch("/api/notify/test", { method: "POST" });
+    const d = await r.json().catch(() => ({}));
+    alert(d.sent ? `Sent via ${d.kind} (HTTP ${d.status}). Check the phone.` : `Not delivered: ${d.detail || d.status || r.status}`);
+  } catch (e) { alert(e.message); }
+  $("#notify-test").disabled = false;
 };
 ["#gb", "#price", "#cloud"].forEach((s) => $(s).onchange = loadCandidates);
 setInterval(() => $("#clock").textContent = new Date().toTimeString().slice(0, 5), 1000);

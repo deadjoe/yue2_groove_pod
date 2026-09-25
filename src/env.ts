@@ -6,6 +6,8 @@ export interface Env {
   DEPLOY: Workflow;
   RUNPOD_API_KEY: string;
   NOTIFY_URL?: string;
+  /** secret, optional: ntfy access token (tk_…) sent as a bearer token with ntfy pushes */
+  NOTIFY_TOKEN?: string;
   /** secret, optional: shared key that gates the page and the API (cookie set via /?k=) */
   LAUNCH_KEY?: string;
   IMAGE: string;

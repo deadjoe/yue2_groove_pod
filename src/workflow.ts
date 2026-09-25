@@ -4,6 +4,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { Env } from "./env";
 import { createPod, deletePod, getPod, listGpuTypes, pickCandidates, podUptime, proxyUrl } from "./runpod";
+import { sendNotification } from "./notify";
 import type { Session } from "./sessions";
 
 export interface DeployParams {
@@ -24,13 +25,14 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
     const env = this.env;
     const sessions = env.SESSIONS.get(env.SESSIONS.idFromName("global"));
     const key = env.RUNPOD_API_KEY;
+    const launcher = new URL(progressUrl).origin; // where tapping a notification leads
 
     const fail = async (where: string, message: string) => {
       const cur = await sessions.get(sessionId);
       if (!cur || cur.state === "ended" || cur.state === "stopping") return; // stopped from the page meanwhile
       await sessions.event(sessionId, { step: "error", status: "failed", message: `${where}: ${message}` });
       await sessions.update(sessionId, { state: "failed", error: `${where}: ${message}`, ended_at: new Date().toISOString() });
-      await notify(env, `GROOVE pod failed — ${where}: ${message}`.slice(0, 400));
+      await notify(env, `GROOVE pod failed — ${where}: ${message}`.slice(0, 400), launcher);
     };
 
     // step outputs are persisted in the Workflow's history, so secrets stay out of them:
@@ -148,7 +150,7 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
     const expires = await step.do("expiry", async () => new Date(Date.now() + session.ttl_hours * 3600_000).toISOString());
     await step.do("mark ready", async () => {
       const s = await sessions.update(sessionId, { state: "ready", ready_at: new Date().toISOString(), expires });
-      await notify(env, `GROOVE is up: ${proxyUrl(pod.id)}  login ${session.auth_user} / ${s?.auth_pass ?? "?"}  (auto-stop ${session.ttl_hours} h)`);
+      await notify(env, `GROOVE is up: ${proxyUrl(pod.id)}  login ${session.auth_user} / ${s?.auth_pass ?? "?"}  (auto-stop ${session.ttl_hours} h)`, launcher);
     });
 
     // 6. cost guard — sleep to the TTL, then delete unless already stopped from the page
@@ -158,7 +160,7 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
       if (!s || s.state !== "ready") return;
       await sessions.event(sessionId, { step: "ttl", status: "info", message: "time limit reached — deleting the pod" });
       await stopPod(env, sessionId, pod.id, "time limit reached");
-      await notify(env, `GROOVE pod stopped (time limit ${session.ttl_hours} h).`);
+      await notify(env, `GROOVE pod stopped (time limit ${session.ttl_hours} h).`, launcher);
     });
   }
 }
@@ -176,11 +178,9 @@ export async function stopPod(env: Env, sessionId: string, podId: string | null,
   await sessions.update(sessionId, { state: "ended", ended_at: new Date().toISOString() });
 }
 
-export async function notify(env: Env, text: string): Promise<void> {
-  if (!env.NOTIFY_URL) return;
-  try {
-    await fetch(env.NOTIFY_URL, { method: "POST", headers: { "content-type": "text/plain", title: "YUE2 // GROOVE" }, body: text });
-  } catch { /* notifications are best effort */ }
+/** Best effort: a failed push never fails the deployment. See notify.ts for the formats. */
+export async function notify(env: Env, text: string, click?: string): Promise<void> {
+  await sendNotification(env.NOTIFY_URL, text, click, env.NOTIFY_TOKEN);
 }
 
 export type { Session };

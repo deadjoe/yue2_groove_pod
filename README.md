@@ -26,7 +26,8 @@ phone ──► worker (/api/launch) ──► Workflow: select gpu → create p
 npm install
 npx wrangler login
 npx wrangler secret put RUNPOD_API_KEY     # a RunPod API key with pod create/delete rights
-npx wrangler secret put NOTIFY_URL         # optional: an ntfy.sh topic URL, e.g. https://ntfy.sh/<random-topic>
+npx wrangler secret put NOTIFY_URL         # optional: a Bark or ntfy URL, see Notifications
+npx wrangler secret put NOTIFY_TOKEN       # with ntfy.sh: an access token (tk_…), see Notifications
 npx wrangler secret put LAUNCH_KEY         # optional: long random string; the page then needs /?k=<key> once
 npx wrangler deploy
 ```
@@ -51,12 +52,34 @@ container runs, weights (31 s), verification (15 s) and app start (6 s) take abo
 The timeline fills in from the pod itself (`weights`, `verify`, `start`, `ready`). When the
 state turns **ready**, tap *OPEN GROOVE* and log in with `groove` / the shown password.
 Closing the page changes nothing; the Workflow finishes on its own and, if `NOTIFY_URL` is
-set, sends a push notification.
+set, sends a push notification (see Notifications).
 
 **Stop & delete pod** ends the session immediately. Otherwise the pod is deleted when the
 time limit is reached. Independently of both, the cron runs every 15 minutes and deletes any
 `yue2-groove-*` pod on the account whose session is over, expired, or unknown for more than
 six hours.
+
+## Notifications
+
+With `NOTIFY_URL` set, the Worker pushes a message when the app is ready, when a launch
+fails and when the time limit deletes the pod, whether or not the page is open. Tapping it
+opens the launcher. The *ready* message includes the login (`groove` / password), so it
+passes through the push service you choose. Pick one:
+
+| Service | `NOTIFY_URL` | Notes |
+|---|---|---|
+| [Bark](https://github.com/Finb/Bark) (iOS) | `https://api.day.app/<device key>` | Free, open source, delivered through Apple's push service. The app shows the URL. A self-hosted Bark server: `bark+https://<host>/<device key>` |
+| [ntfy](https://ntfy.sh) (Android, iOS, desktop) | `https://ntfy.sh/<topic>` or your own ntfy server's topic URL | Free, 250 messages a day. **Needs `NOTIFY_TOKEN` on ntfy.sh**, see below. Anyone who knows the topic reads it, so make it long and random |
+
+**ntfy.sh and Workers:** ntfy.sh counts anonymous messages per sending IP, and a Worker
+sends from IPs it shares with every other Worker, so their daily quota is usually used up
+already (the test answers HTTP 429). Sign up for a free ntfy.sh account, create an access
+token (Account → Access tokens) and store it as `NOTIFY_TOKEN`; the quota is then your
+account's. Bark has no such limit. On iOS, Bark is also the more dependable of the two.
+
+Either URL is a secret: whoever has it can send to your phone (Bark) or read the
+messages (ntfy). **Send test notification** on the page checks the setup; the API
+equivalent is `POST /api/notify/test`.
 
 ## Configuration
 
@@ -81,6 +104,7 @@ Cards without usable bf16 (V100, T4, P-series, RTX 20xx, A2) are skipped regardl
 | `POST /api/launch` `{ttl_hours, min_gpu_gb, max_price, cloud}` | start a session (409 if one is live) |
 | `GET /api/sessions`, `GET /api/sessions/:id` | state, events, URL, cost estimate |
 | `POST /api/sessions/:id/stop` | delete the pod, end the session |
+| `POST /api/notify/test` | one push through `NOTIFY_URL`; answers what the service replied |
 | `POST /api/progress/:id` (bearer token) | called by the pod's `groove-start` |
 
 ## Development

@@ -2,6 +2,7 @@
 // Put the whole hostname behind Cloudflare Access; add a bypass policy for /api/progress/* so
 // the pod can report progress (that route is protected by the per-session bearer token).
 import type { Env } from "./env";
+import { notifyKind, sendNotification } from "./notify";
 import { listGpuTypes, listPods, pickCandidates } from "./runpod";
 import { Sessions, type Session } from "./sessions";
 import { DeployWorkflow, stopPod } from "./workflow";
@@ -82,7 +83,13 @@ export default {
       const cloud = (url.searchParams.get("cloud") === "COMMUNITY" ? "COMMUNITY" : "SECURE") as "SECURE" | "COMMUNITY";
       const minGb = clampNum(url.searchParams.get("min_gb"), 8, 80, Number(env.MIN_GPU_GB));
       const maxPrice = clampNum(url.searchParams.get("max_price"), 0.05, 5, Number(env.MAX_PRICE_PER_HR));
-      return json({ candidates: pickCandidates(gpus, { minGb, maxPrice, cloud }), defaults: { min_gb: Number(env.MIN_GPU_GB), max_price: Number(env.MAX_PRICE_PER_HR), cloud: env.CLOUD, ttl_hours: Number(env.DEFAULT_TTL_HOURS), max_ttl_hours: Number(env.MAX_TTL_HOURS), image: env.IMAGE } });
+      return json({ candidates: pickCandidates(gpus, { minGb, maxPrice, cloud }), defaults: { min_gb: Number(env.MIN_GPU_GB), max_price: Number(env.MAX_PRICE_PER_HR), cloud: env.CLOUD, ttl_hours: Number(env.DEFAULT_TTL_HOURS), max_ttl_hours: Number(env.MAX_TTL_HOURS), image: env.IMAGE, notify: env.NOTIFY_URL?.trim() ? notifyKind(env.NOTIFY_URL.trim()).kind : null } });
+    }
+
+    // one push through NOTIFY_URL, to check the setup; reports what the service answered
+    if (url.pathname === "/api/notify/test" && req.method === "POST") {
+      const result = await sendNotification(env.NOTIFY_URL, "Test notification from the YUE2 // GROOVE launcher.", url.origin, env.NOTIFY_TOKEN);
+      return json(result, result.sent ? 200 : 502);
     }
 
     if (url.pathname === "/api/sessions" && req.method === "GET") {

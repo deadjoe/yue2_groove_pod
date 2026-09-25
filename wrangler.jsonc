@@ -32,6 +32,7 @@
     // Per-pod disk for the image layers + 8 GB of weights.
     "CONTAINER_DISK_GB": "40"
   }
-  // Secrets (wrangler secret put): RUNPOD_API_KEY (required), NOTIFY_URL (optional ntfy/Bark/… URL),
+  // Secrets (wrangler secret put): RUNPOD_API_KEY (required), NOTIFY_URL (optional Bark or ntfy URL),
+  // NOTIFY_TOKEN (ntfy access token; needed with ntfy.sh, see README),
   // LAUNCH_KEY (optional; gates the page + API with a cookie set from /?k=<key>)
 }
