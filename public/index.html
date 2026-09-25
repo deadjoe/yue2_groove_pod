@@ -73,6 +73,11 @@
   .events time { color: var(--bb-ink4); } .events .step { color: var(--bb-ink2); letter-spacing: .08em; text-transform: uppercase; }
   .events .failed { color: var(--bb-danger); } .events .done { color: var(--bb-ok); }
   .muted { color: var(--bb-ink3); font-size: 12px; }
+  .notify { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .notify .ok { color: var(--bb-ok); } .notify .failed { color: var(--bb-danger); }
+  button.icon { width: auto; padding: 2px; margin: -2px 0; border: 0; border-radius: 4px; background: transparent; color: var(--bb-ink3); line-height: 0; letter-spacing: 0; }
+  button.icon:hover, button.icon:focus-visible { color: var(--bb-ink); }
+  button.icon svg { width: 14px; height: 14px; }
   .cands { font-size: 12px; color: var(--bb-ink2); margin-top: 8px; }
   .cands span { display: inline-block; margin: 2px 8px 2px 0; }
   footer { margin-top: 20px; font-size: 11px; color: var(--bb-ink4); letter-spacing: .08em; text-transform: uppercase; }
@@ -94,7 +99,7 @@
   </div>
   <div class="cands" id="cands">checking prices…</div>
   <div style="margin-top:12px"><button class="primary" id="go">Deploy</button></div>
-  <div class="row" style="margin-top:10px;align-items:center"><span class="muted" id="notify-state"></span><button id="notify-test" hidden>Send test notification</button></div>
+  <div class="notify muted"><span id="notify-state"></span><button class="icon" id="notify-test" title="Send test notification" aria-label="Send test notification" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1.5H3z"/><path d="M6.5 14.5a1.6 1.6 0 0 0 3 0"/></svg></button></div>
   <p class="muted" id="launch-note">A pod is created, the image pulled (the slow part, 5–15 min on a cold host), the weights downloaded and verified, then the app started. You can close this page; it keeps going.</p>
 </section>
 
@@ -125,7 +130,8 @@ async function loadCandidates() {
       : "nothing in stock within these limits — widen the price or memory";
     $("#go").disabled = !d.candidates.length;
     const kind = d.defaults.notify;
-    $("#notify-state").textContent = kind ? `notifications: ${kind === "bark" ? "Bark" : "ntfy"}` : "notifications: off (set NOTIFY_URL)";
+    notifyLabel = kind ? `notifications: ${kind === "bark" ? "Bark" : "ntfy"}` : "notifications: off (set NOTIFY_URL)";
+    $("#notify-state").textContent = notifyLabel; $("#notify-state").className = "";
     $("#notify-test").hidden = !kind;
   } catch (e) { $("#cands").textContent = "price check failed: " + e.message; }
 }
@@ -170,14 +176,22 @@ $("#go").onclick = async () => {
   } catch (e) { alert(e.message); }
   $("#go").disabled = false; refresh();
 };
+// the result shows in the line itself for a few seconds, then the label returns
+let notifyLabel = "", notifyTimer = null;
 $("#notify-test").onclick = async () => {
-  $("#notify-test").disabled = true;
+  const state = $("#notify-state");
+  $("#notify-test").disabled = true; state.className = ""; state.textContent = "sending…";
+  let ok = false, text;
   try {
     const r = await fetch("/api/notify/test", { method: "POST" });
     const d = await r.json().catch(() => ({}));
-    alert(d.sent ? `Sent via ${d.kind} (HTTP ${d.status}). Check the phone.` : `Not delivered: ${d.detail || d.status || r.status}`);
-  } catch (e) { alert(e.message); }
+    ok = !!d.sent;
+    text = ok ? "test sent — check the phone" : `not delivered: ${d.detail || d.status || r.status}`;
+  } catch (e) { text = `not delivered: ${e.message}`; }
+  state.className = ok ? "ok" : "failed"; state.textContent = text;
   $("#notify-test").disabled = false;
+  clearTimeout(notifyTimer);
+  notifyTimer = setTimeout(() => { state.className = ""; state.textContent = notifyLabel; }, ok ? 4000 : 10000);
 };
 ["#gb", "#price", "#cloud"].forEach((s) => $(s).onchange = loadCandidates);
 setInterval(() => $("#clock").textContent = new Date().toTimeString().slice(0, 5), 1000);
