@@ -81,7 +81,8 @@ Defaults in `wrangler.jsonc`:
 The page overrides the time limit, memory, price and cloud per launch. Price and stock are
 read for the chosen cloud alone, and a pod that RunPod charges more for than the ceiling is
 deleted at once. Pods need a CUDA 12.8 driver; cards without usable bf16 (V100, T4, P-series,
-RTX 2060–2080, Quadro RTX, A2), MIG slices and non-NVIDIA cards are skipped.
+RTX 2060–2080, Quadro RTX, A2), MIG slices and non-NVIDIA cards are skipped, and so is the
+RTX 2000 Ada, which has bf16 but is too slow for the price difference.
 
 ## API
 

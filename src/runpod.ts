@@ -31,6 +31,9 @@ export interface Candidate {
 // GPUs the app cannot use: no bf16 (Volta/Turing/Pascal) — upstream's loader refuses them.
 // Turing is T4, the RTX 20x0 cards and Quadro RTX; "RTX 20[4-8]0" leaves RTX 2000 Ada (bf16) in.
 const NO_BF16 = /V100|T4\b|P100|P40|P4\b|RTX 20[4-8]0|Quadro RTX|TITAN RTX|A2\b|MIG/i; // MIG slices are not accepted as gpuTypeIds either
+// Cards with bf16 that are skipped for speed: RTX 2000 Ada is a 70 W card with a third of an
+// RTX A5000's memory bandwidth, usually only $0.03/h cheaper, and untested with the app.
+const TOO_SLOW = /RTX 2000 Ada/i;
 
 async function call(url: string, key: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
@@ -61,6 +64,7 @@ export function pickCandidates(
     // NVIDIA only: the image is CUDA (the list also has AMD cards)
     if (!/NVIDIA|Tesla/i.test(g.id)) continue;
     if (g.memoryInGb < opts.minGb || NO_BF16.test(g.displayName) || NO_BF16.test(g.id)) continue;
+    if (TOO_SLOW.test(g.displayName) || TOO_SLOW.test(g.id)) continue;
     // the chosen cloud's own offer: in stock there, at the price actually charged there
     const offer = opts.cloud === "SECURE" ? g.secure : g.community;
     const price = offer?.uninterruptablePrice ?? null;
