@@ -78,9 +78,10 @@ Defaults in `wrangler.jsonc`:
 | `DEFAULT_TTL_HOURS` / `MAX_TTL_HOURS` | `3` / `8` | time limit and its cap |
 | `CONTAINER_DISK_GB` | `40` | holds the image and the weights |
 
-The page overrides the time limit, memory, price and cloud per launch. Pods need a CUDA 12.8
-driver; cards without usable bf16 (V100, T4, P-series, RTX 20xx, A2) and MIG slices are
-skipped.
+The page overrides the time limit, memory, price and cloud per launch. Price and stock are
+read for the chosen cloud alone, and a pod that RunPod charges more for than the ceiling is
+deleted at once. Pods need a CUDA 12.8 driver; cards without usable bf16 (V100, T4, P-series,
+RTX 2060–2080, Quadro RTX, A2), MIG slices and non-NVIDIA cards are skipped.
 
 ## API
 

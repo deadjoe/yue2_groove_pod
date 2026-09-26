@@ -92,6 +92,16 @@ export class DeployWorkflow extends WorkflowEntrypoint<Env, DeployParams> {
       await sessions.event(sessionId, { step: "pod", status: "done", message: `${pod.id} · ${gpuId ?? "?"}${price ? ` · $${price}/h` : ""}${pod.machine?.dataCenterId ? ` · ${pod.machine.dataCenterId}` : ""}` });
     });
 
+    // 2b. what RunPod actually charges must be within the ceiling, whatever the listing said:
+    //     otherwise delete the pod at once (a few seconds of billing at most)
+    if (pod.costPerHr != null && pod.costPerHr > session.max_price + 1e-9) {
+      await step.do("over the price ceiling", async () => {
+        await fail("price", `RunPod charges $${pod.costPerHr}/h for ${gpuId ?? "this card"}, above the $${session.max_price}/h ceiling; pod deleted`);
+        await stopPod(env, sessionId, pod.id, "price above the ceiling");
+      });
+      return;
+    }
+
     // 3. wait for the container to run (image pull happens here)
     let running = false;
     for (let i = 0; i < (RUNNING_MAX_MIN * 60) / RUNNING_POLL_S && !running; i++) {
